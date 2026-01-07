@@ -3,63 +3,54 @@
 #include "epd_gui.h"
 #include "fonts.h"
 
-// ====== USER SETTINGS ======
-const int MOISTURE_PIN = 34;                      // ESP32 ADC pin (GPIO34 ok)
+// ====== SETTINGS ======
+const int MOISTURE_PIN = 34;
 const uint32_t UPDATE_MS = 30UL * 60UL * 1000UL;  // 30 minutes
 
 // Calibrate:
 //  - sensor in air  -> DRY_RAW
-//  - sensor in water (or soaked soil) -> WET_RAW
-const int DRY_RAW = 3200;  // <-- change
-const int WET_RAW = 1400;  // <-- change
+//  - sensor in water/soaked soil -> WET_RAW
+const int DRY_RAW = 3200;   // <-- change
+const int WET_RAW = 1400;   // <-- change
 
-// Mood thresholds (percent)
-const int THRESH_DRY = 35;   // < 35% => sad
-const int THRESH_WET = 70;   // >= 70% => happy
+// Mood thresholds (%)
+const int THRESH_DRY = 35;
+const int THRESH_WET = 70;
 
-// Dynamic region (partial update). X must be multiple of 8.
-#define HEADER_H  30
-#define BOX_X     0
-#define BOX_Y     HEADER_H
-#define BOX_W     EPD_WIDTH
-#define BOX_H     (EPD_HEIGHT - HEADER_H)
+// IMPORTANT: "No rotation"
+static const int SCREEN_ROTATE = ROTATE_0;
 
-// ====== INTERNAL ======
-#define SCR_ROW_BYTES ((EPD_WIDTH % 8 == 0) ? (EPD_WIDTH / 8) : (EPD_WIDTH / 8 + 1))
-#define BOX_ROW_BYTES ((BOX_W   % 8 == 0) ? (BOX_W   / 8) : (BOX_W   / 8 + 1))
+// With ROTATE_0, GUI coordinates are:
+static const int CANVAS_W = EPD_WIDTH;   // 122
+static const int CANVAS_H = EPD_HEIGHT;  // 250
 
-static uint8_t boxBuf[BOX_ROW_BYTES * BOX_H];
-
+// ====== helpers ======
 static int clampi(int v, int lo, int hi) { return (v < lo) ? lo : (v > hi) ? hi : v; }
 
-static int moisturePercent(int raw)
-{
-  // common case: DRY_RAW > WET_RAW
-  long pct = (long)(DRY_RAW - raw) * 100L / (long)(DRY_RAW - WET_RAW);
-  return clampi((int)pct, 0, 100);
-}
-
-static int readMoistureRaw()
-{
+static int readMoistureRawAveraged() {
   const int N = 16;
   long sum = 0;
-  for (int i = 0; i < N; i++)
-  {
+  for (int i = 0; i < N; i++) {
     sum += analogRead(MOISTURE_PIN);
     delay(5);
   }
   return (int)(sum / N);
 }
 
-static const char* statusFromPct(int pct)
-{
+static int moisturePercent(int raw) {
+  long denom = (long)(DRY_RAW - WET_RAW);
+  if (denom == 0) return 0;
+  long pct = (long)(DRY_RAW - raw) * 100L / denom;  // assumes DRY_RAW > WET_RAW (common)
+  return clampi((int)pct, 0, 100);
+}
+
+static const char* statusFromPct(int pct) {
   if (pct < THRESH_DRY) return "DRY";
   if (pct >= THRESH_WET) return "WET";
   return "OK";
 }
 
-static void epdPinsInit()
-{
+static void epdPinsInit() {
   pinMode(BUSY_Pin, INPUT_PULLUP);
   pinMode(RES_Pin, OUTPUT);
   pinMode(DC_Pin, OUTPUT);
@@ -68,128 +59,89 @@ static void epdPinsInit()
   pinMode(SDI_Pin, OUTPUT);
 }
 
-static void copyBoxFromBWimage()
-{
-  int srcByteX = BOX_X / 8;
-  for (int y = 0; y < BOX_H; y++)
-  {
-    const uint8_t* src = BWimage + (BOX_Y + y) * SCR_ROW_BYTES + srcByteX;
-    uint8_t* dst = boxBuf + y * BOX_ROW_BYTES;
-    memcpy(dst, src, BOX_ROW_BYTES);
-  }
-}
-
-static void partialUpdateBox()
-{
-  copyBoxFromBWimage();
-  // signature: (x, y, data, PART_COLUMN=height, PART_LINE=width)
-  EPD_Dis_Part(BOX_X, BOX_Y, boxBuf, BOX_H, BOX_W);
-}
-
-// Draw a clean percent symbol ourselves (fonts often have a broken %)
-static void drawPercentSymbol(int x, int y)
-{
-  // two dots
+// draw a clean percent symbol (fonts often mess it up)
+static void drawPercentSymbol(int x, int y) {
   Gui_Draw_Circle(x + 2,  y + 2,  2, BLACK, FULL,  PIXEL_1X1);
   Gui_Draw_Circle(x + 12, y + 14, 2, BLACK, FULL,  PIXEL_1X1);
-  // slash
-  Gui_Draw_Line(x + 12, y + 2, x + 2, y + 14, BLACK, PIXEL_1X1, SOLID);
+  Gui_Draw_Line  (x + 12, y + 2,  x + 2,  y + 14, BLACK, PIXEL_1X1, SOLID);
 }
 
-static void drawFaceAt(int cx, int cy, int r, int pct)
-{
-  // head
+static void drawFaceAt(int cx, int cy, int r, int pct) {
   Gui_Draw_Circle(cx, cy, r, BLACK, EMPTY, PIXEL_2X2);
 
-  // eyes
   int ex = r / 3;
   int ey = r / 4;
   int er = 3;
   Gui_Draw_Circle(cx - ex, cy - ey, er, BLACK, FULL, PIXEL_1X1);
   Gui_Draw_Circle(cx + ex, cy - ey, er, BLACK, FULL, PIXEL_1X1);
 
-  // mouth
-  if (pct >= THRESH_WET)
-  {
+  if (pct >= THRESH_WET) {
     // smile
     Gui_Draw_Line(cx - r/2, cy + r/6, cx - r/4, cy + r/3, BLACK, PIXEL_2X2, SOLID);
     Gui_Draw_Line(cx - r/4, cy + r/3, cx + r/4, cy + r/3, BLACK, PIXEL_2X2, SOLID);
     Gui_Draw_Line(cx + r/4, cy + r/3, cx + r/2, cy + r/6, BLACK, PIXEL_2X2, SOLID);
-  }
-  else if (pct < THRESH_DRY)
-  {
+  } else if (pct < THRESH_DRY) {
     // sad
     Gui_Draw_Line(cx - r/2, cy + r/2, cx - r/4, cy + r/3, BLACK, PIXEL_2X2, SOLID);
     Gui_Draw_Line(cx - r/4, cy + r/3, cx + r/4, cy + r/3, BLACK, PIXEL_2X2, SOLID);
     Gui_Draw_Line(cx + r/4, cy + r/3, cx + r/2, cy + r/2, BLACK, PIXEL_2X2, SOLID);
-  }
-  else
-  {
+  } else {
     // neutral
     Gui_Draw_Line(cx - r/2 + 6, cy + r/3, cx + r/2 - 6, cy + r/3, BLACK, PIXEL_2X2, SOLID);
   }
 }
 
-static void drawStaticLayout()
-{
+static void renderScreen(int pct) {
   Gui_SelectImage(BWimage);
   Gui_Clear(WHITE);
 
+  // Header
   Gui_Draw_Str(0, 0, "Plant Monitor", &Font24, WHITE, BLACK);
-  Gui_Draw_Line(0, 28, EPD_WIDTH - 1, 28, BLACK, PIXEL_1X1, SOLID);
+  Gui_Draw_Line(0, 28, CANVAS_W - 1, 28, BLACK, PIXEL_1X1, SOLID);
 
-  // outline for dynamic region
-  Gui_Draw_Rectangle(BOX_X, BOX_Y, BOX_X + BOX_W - 1, BOX_Y + BOX_H - 1, BLACK, EMPTY, PIXEL_1X1);
+  // Left column (text)
+  const int leftX = 4;
+  const int y0 = 48;
 
+  Gui_Draw_Str(leftX, y0, "Moisture", &Font16, WHITE, BLACK);
+
+  char num[8];
+  snprintf(num, sizeof(num), "%d", pct);
+  Gui_Draw_Str(leftX, y0 + 20, num, &Font24, WHITE, BLACK);
+
+  int xPct = leftX + (pct < 10 ? 18 : (pct < 100 ? 32 : 46));
+  drawPercentSymbol(xPct, y0 + 28);
+
+  char st[24];
+  snprintf(st, sizeof(st), "Status:%s", statusFromPct(pct));
+  Gui_Draw_Str(leftX, y0 + 58, st, &Font16, WHITE, BLACK);
+
+  // Bar at bottom
+  int barX = leftX;
+  int barY = CANVAS_H - 18;
+  int barW = 66;
+  int barH = 10;
+  Gui_Draw_Rectangle(barX, barY, barX + barW, barY + barH, BLACK, EMPTY, PIXEL_1X1);
+  int fillW = (barW - 2) * pct / 100;
+  Gui_Draw_Rectangle(barX + 1, barY + 1, barX + 1 + fillW, barY + barH - 1, BLACK, FULL, PIXEL_1X1);
+
+  // Right column (face)
+  int faceR  = 26;
+  int faceCx = 88;          // right side of 122px-wide screen
+  int faceCy = 120;         // center-ish in 250px height
+  drawFaceAt(faceCx, faceCy, faceR, pct);
+
+  // RW unused
   Gui_SelectImage(RWimage);
   Gui_Clear(WHITE);
 }
 
-static void drawDynamic(int pct)
-{
-  Gui_SelectImage(BWimage);
-
-  // Clear inside the dynamic box (leave outline)
-  Gui_Draw_Rectangle(BOX_X + 1, BOX_Y + 1, BOX_X + BOX_W - 2, BOX_Y + BOX_H - 2,
-                     WHITE, FULL, PIXEL_1X1);
-
-  // ---- Left column ----
-  const int leftX = 6;
-  const int leftBlockH = 16 + 24 + 16 + 16;
-  const int textTop = BOX_Y + (BOX_H - leftBlockH) / 2;
-
-  Gui_Draw_Str(leftX, textTop, "Moisture", &Font16, WHITE, BLACK);
-
-  // big number
-  char pctStr[8];
-  snprintf(pctStr, sizeof(pctStr), "%d", pct);
-  Gui_Draw_Str(leftX, textTop + 22, pctStr, &Font24, WHITE, BLACK);
-
-  // manual percent sign
-  int xPct = leftX + (pct < 10 ? 18 : (pct < 100 ? 32 : 46));
-  drawPercentSymbol(xPct, textTop + 28);
-
-  // status
-  char stLine[24];
-  snprintf(stLine, sizeof(stLine), "Status: %s", statusFromPct(pct));
-  Gui_Draw_Str(leftX, textTop + 62, stLine, &Font16, WHITE, BLACK);
-
-  // ---- Right column: face ----
-  const int leftAreaW = 62; // reserve space for left text
-  const int rightAreaW = BOX_W - leftAreaW;
-  const int cx = BOX_X + leftAreaW + rightAreaW / 2;
-  const int cy = BOX_Y + BOX_H / 2;
-  int r = min(rightAreaW, BOX_H) / 2 - 6;
-  if (r < 18)
-  {
-    r = 18;
-  }
-
-  drawFaceAt(cx, cy, r, pct);
+static void updateDisplay(int pct) {
+  renderScreen(pct);
+  EPD_Display(BWimage, RWimage);
 }
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
 
   analogReadResolution(12);
@@ -197,44 +149,30 @@ void setup()
 
   epdPinsInit();
 
-  // Full init + clear once at boot (flash happens once)
+  // IMPORTANT: use the normal init (not GUI init), and clear once
   EPD_HW_Init();
   EPD_WhiteScreen_White();
 
-  // Init GUI buffers (this is the same flow as your working code)
-  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, 270, WHITE);
-  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, 270, WHITE);
+  // Set GUI rotation explicitly
+  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, SCREEN_ROTATE, WHITE);
+  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, SCREEN_ROTATE, WHITE);
 
-  drawStaticLayout();
-
-  int raw = readMoistureRaw();
+  int raw = readMoistureRawAveraged();
   int pct = moisturePercent(raw);
   Serial.printf("BOOT raw=%d pct=%d\n", raw, pct);
 
-  drawDynamic(pct);
-  EPD_Display(BWimage, RWimage); // full draw once
-
-  Serial.println("Boot display done.");
+  updateDisplay(pct);
 }
 
-void loop()
-{
+void loop() {
   static uint32_t lastUpdate = 0;
-  static int lastPct = -1;
   uint32_t now = millis();
-  if (now - lastUpdate < UPDATE_MS) return;
+  if ((uint32_t)(now - lastUpdate) < UPDATE_MS) return;
   lastUpdate = now;
 
-  int raw = readMoistureRaw();
+  int raw = readMoistureRawAveraged();
   int pct = moisturePercent(raw);
   Serial.printf("raw=%d pct=%d\n", raw, pct);
 
-  if (pct == lastPct)
-  {
-    return;
-  }
-  lastPct = pct;
-
-  drawDynamic(pct);
-  partialUpdateBox();
+  updateDisplay(pct);
 }
