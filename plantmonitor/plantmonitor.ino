@@ -1,4 +1,5 @@
 #include <Arduino.h>
+#include <string.h>
 #include "epd_2inch13.h"
 #include "epd_gui.h"
 #include "fonts.h"
@@ -138,8 +139,7 @@ static void drawStaticLayout()
   // outline for dynamic region
   Gui_Draw_Rectangle(BOX_X, BOX_Y, BOX_X + BOX_W - 1, BOX_Y + BOX_H - 1, BLACK, EMPTY, PIXEL_1X1);
 
-  Gui_SelectImage(RWimage);
-  Gui_Clear(WHITE);
+  memset(RWimage, 0x00, sizeof(RWimage));
 }
 
 static void drawDynamic(int pct)
@@ -205,8 +205,8 @@ void setup()
   EPD_WhiteScreen_White();
 
   // Buffers (keep your working rotation)
-  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, 270, WHITE);
-  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, 270, WHITE);
+  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_0, WHITE);
+  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_0, WHITE);
 
   drawStaticLayout();
 
@@ -230,5 +230,5 @@ void loop()
   Serial.printf("raw=%d pct=%d\n", raw, pct);
 
   drawDynamic(pct);
-  partialUpdateBox();
+  EPD_Display(BWimage, RWimage);
 }
