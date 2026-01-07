@@ -483,19 +483,6 @@ void EPD_Dis_Part(unsigned int x_start, unsigned int y_start,
     Epaper_Write_Data(0x00);
   }
 
-  Epaper_Write_Command(0x4E);
-  Epaper_Write_Data(x_start);
-
-  Epaper_Write_Command(0x4F);
-  Epaper_Write_Data(y_start2);
-  Epaper_Write_Data(y_start1);
-
-  Epaper_Write_Command(0x26);
-  for (i = 0; i < (PART_COLUMN * PART_LINE / 8); i++)
-  {
-    Epaper_Write_Data(0xFF);
-  }
-  
   EPD_Part_Update();
 }
 
