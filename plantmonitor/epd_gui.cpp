@@ -171,8 +171,8 @@ void Gui_SetPixel(uint16_t x, uint16_t y, uint16_t color)
     }
     else
     {
-        RWimage[Addr] = BWdata | (0x80 >> (xx % 8));  
-        BWimage[Addr] = RWdata | (0x80 >> (xx % 8));
+        BWimage[Addr] = BWdata | (0x80 >> (xx % 8));
+        RWimage[Addr] = RWdata | (0x80 >> (xx % 8));
     }
 }
 
