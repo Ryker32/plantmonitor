@@ -5,8 +5,8 @@
 #include "fonts.h"
 
 IMAGE Image;
-unsigned char BWimage[];//Define canvas space  
-unsigned char RWimage[]; 
+unsigned char BWimage[4000];//Define canvas space  
+unsigned char RWimage[4000];
 /******************************************************************************
 function:  Create Image
 parameter:
