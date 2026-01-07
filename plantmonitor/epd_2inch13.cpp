@@ -374,10 +374,10 @@ void EPD_SetRAMValue_BaseMap(const unsigned char *BWdatas,const unsigned char *R
 
 void EPD_HW_Init_GUI(void)
 {
-  // EPD_W21_RST_0;  // Module reset   
-  // delay(10);//At least 10ms delay 
-  // EPD_W21_RST_1;
-  // delay(10); //At least 10ms delay 
+  EPD_W21_RST_0;  // Module reset   
+  delay(10);//At least 10ms delay 
+  EPD_W21_RST_1;
+  delay(10); //At least 10ms delay 
   
   Epaper_READBUSY();   
   Epaper_Write_Command(0x12);  //SWRESET
