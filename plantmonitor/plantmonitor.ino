@@ -21,10 +21,13 @@ const int THRESH_WET = 70;   // >= 70% => happy
 // Dynamic region (partial update). NOTE:
 // - X must be multiple of 8
 // - WIDTH should be multiple of 8 for your driver math to behave nicely
+#define SCREEN_W  EPD_HEIGHT
+#define SCREEN_H  EPD_WIDTH
+#define HEADER_H  28
 #define BOX_X  0
-#define BOX_Y  32
-#define BOX_W  120
-#define BOX_H  210
+#define BOX_Y  (HEADER_H + 4)
+#define BOX_W  ((SCREEN_W / 8) * 8)
+#define BOX_H  (SCREEN_H - BOX_Y)
 
 // ====== INTERNAL ======
 #define SCR_ROW_BYTES ((EPD_WIDTH % 8 == 0) ? (EPD_WIDTH / 8) : (EPD_WIDTH / 8 + 1))
@@ -134,7 +137,7 @@ static void drawStaticLayout()
 
   // Header (keep within x=0..121)
   Gui_Draw_Str(0, 0, "Plant Monitor", &Font24, WHITE, BLACK);
-  Gui_Draw_Line(0, 28, 119, 28, BLACK, PIXEL_1X1, SOLID);
+  Gui_Draw_Line(0, HEADER_H, BOX_W - 1, HEADER_H, BLACK, PIXEL_1X1, SOLID);
 
   // outline for dynamic region
   Gui_Draw_Rectangle(BOX_X, BOX_Y, BOX_X + BOX_W - 1, BOX_Y + BOX_H - 1, BLACK, EMPTY, PIXEL_1X1);
@@ -169,7 +172,7 @@ static void drawDynamic(int pct)
 
   // bar
   int barX = leftX;
-  int barY = BOX_Y + BOX_H - 20;
+  int barY = BOX_Y + BOX_H - 16;
   int barW = 56;
   int barH = 8;
   Gui_Draw_Rectangle(barX, barY, barX + barW, barY + barH, BLACK, EMPTY, PIXEL_1X1);
@@ -178,7 +181,7 @@ static void drawDynamic(int pct)
 
   // ----- Right side face (MUST be inside the BOX) -----
   // BOX is 0..119 in X if BOX_X=0 and BOX_W=120
-  const int faceR  = 28;
+  const int faceR  = 18;
 
   // Put the face safely on the right half of the box
   const int faceCx = BOX_X + (BOX_W * 3) / 4;      // ~90 if BOX_W=120
@@ -205,8 +208,9 @@ void setup()
   EPD_WhiteScreen_White();
 
   // Buffers (keep your working rotation)
-  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_0, WHITE);
-  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_0, WHITE);
+  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_90, WHITE);
+  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_90, WHITE);
+  Gui_SetMirror(MIRROR_NONE);
 
   drawStaticLayout();
 
