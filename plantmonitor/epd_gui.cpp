@@ -5,8 +5,8 @@
 #include "fonts.h"
 
 IMAGE Image;
-unsigned char BWimage[];//Define canvas space  
-unsigned char RWimage[]; 
+unsigned char BWimage[4000];//Define canvas space  
+unsigned char RWimage[4000];
 /******************************************************************************
 function:  Create Image
 parameter:
@@ -163,16 +163,17 @@ void Gui_SetPixel(uint16_t x, uint16_t y, uint16_t color)
     if(color == BLACK)
     {
         BWimage[Addr] = BWdata & ~(0x80 >> (xx % 8));
+        RWimage[Addr] = RWdata & ~(0x80 >> (xx % 8));
     }
     else if(color == RED)
     {
-
-        RWimage[Addr] = RWdata & ~(0x80 >> (xx % 8));
+        BWimage[Addr] = BWdata | (0x80 >> (xx % 8));
+        RWimage[Addr] = RWdata | (0x80 >> (xx % 8));
     }
     else
     {
-        RWimage[Addr] = BWdata | (0x80 >> (xx % 8));  
-        BWimage[Addr] = RWdata | (0x80 >> (xx % 8));
+        BWimage[Addr] = BWdata | (0x80 >> (xx % 8));
+        RWimage[Addr] = RWdata & ~(0x80 >> (xx % 8));
     }
 }
 
@@ -190,8 +191,16 @@ void Gui_Clear(uint16_t color)
         for (x = 0; x < Image.byte_w; x++) 
         {//8 pixel =  1 byte
             addr = x + y*Image.byte_w;
-            RWimage[addr] = color;
-            BWimage[addr] = color;
+            if (color == RED) {
+                BWimage[addr] = 0xFF;
+                RWimage[addr] = 0xFF;
+            } else if (color == BLACK) {
+                BWimage[addr] = 0x00;
+                RWimage[addr] = 0x00;
+            } else {
+                BWimage[addr] = 0xFF;
+                RWimage[addr] = 0x00;
+            }
         }
     }
 }
