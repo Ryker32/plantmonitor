@@ -205,8 +205,8 @@ void setup()
   EPD_WhiteScreen_White();
 
   // Buffers (keep your working rotation)
-  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_270, WHITE);
-  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_270, WHITE);
+  Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_0, WHITE);
+  Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_0, WHITE);
 
   drawStaticLayout();
 
