@@ -18,16 +18,15 @@ const int WET_RAW = 1400;  // <-- change
 const int THRESH_DRY = 35;   // < 35% => sad
 const int THRESH_WET = 70;   // >= 70% => happy
 
-// Dynamic region (partial update). NOTE:
-// - X must be multiple of 8
-// - WIDTH should be multiple of 8 for your driver math to behave nicely
-#define SCREEN_W  EPD_HEIGHT
-#define SCREEN_H  EPD_WIDTH
+// Landscape canvas dimensions when using ROTATE_90/270
+#define SCREEN_W  EPD_HEIGHT   // 250
+#define SCREEN_H  EPD_WIDTH    // 122
+
 #define HEADER_H  28
-#define BOX_X  0
-#define BOX_Y  (HEADER_H + 4)
-#define BOX_W  ((SCREEN_W / 8) * 8)
-#define BOX_H  (SCREEN_H - BOX_Y)
+#define BOX_X     0
+#define BOX_Y     (HEADER_H + 4)
+#define BOX_W     ((SCREEN_W / 8) * 8)   // keep multiple of 8
+#define BOX_H     (SCREEN_H - BOX_Y)
 
 // ====== INTERNAL ======
 #define SCR_ROW_BYTES ((EPD_WIDTH % 8 == 0) ? (EPD_WIDTH / 8) : (EPD_WIDTH / 8 + 1))
@@ -72,7 +71,7 @@ static void epdPinsInit()
   pinMode(SDI_Pin, OUTPUT);
 }
 
-// Copy BOX region from BWimage into boxBuf
+// Copy BOX region from BWimage into boxBuf (only used if you switch back to partial update)
 static void copyBoxFromBWimage()
 {
   int srcByteX = BOX_X / 8;
@@ -135,14 +134,15 @@ static void drawStaticLayout()
   Gui_SelectImage(BWimage);
   Gui_Clear(WHITE);
 
-  // Header (keep within x=0..121)
   Gui_Draw_Str(0, 0, "Plant Monitor", &Font24, WHITE, BLACK);
   Gui_Draw_Line(0, HEADER_H, BOX_W - 1, HEADER_H, BLACK, PIXEL_1X1, SOLID);
 
-  // outline for dynamic region
+  // Outline for dynamic region
   Gui_Draw_Rectangle(BOX_X, BOX_Y, BOX_X + BOX_W - 1, BOX_Y + BOX_H - 1, BLACK, EMPTY, PIXEL_1X1);
 
-  memset(RWimage, 0x00, sizeof(RWimage));
+  // Make sure RW buffer is "white"/empty
+  Gui_SelectImage(RWimage);
+  Gui_Clear(WHITE);
 }
 
 static void drawDynamic(int pct)
@@ -153,7 +153,6 @@ static void drawDynamic(int pct)
   Gui_Draw_Rectangle(BOX_X + 1, BOX_Y + 1, BOX_X + BOX_W - 2, BOX_Y + BOX_H - 2,
                      WHITE, FULL, PIXEL_1X1);
 
-  // ----- Left side text -----
   const int leftX = 6;
 
   Gui_Draw_Str(leftX, BOX_Y + 10, "Moisture", &Font16, WHITE, BLACK);
@@ -179,19 +178,12 @@ static void drawDynamic(int pct)
   int fillW = (barW - 2) * pct / 100;
   Gui_Draw_Rectangle(barX + 1, barY + 1, barX + 1 + fillW, barY + barH - 1, BLACK, FULL, PIXEL_1X1);
 
-  // ----- Right side face (MUST be inside the BOX) -----
-  // BOX is 0..119 in X if BOX_X=0 and BOX_W=120
+  // Face in right side of the box
   const int faceR  = 18;
-
-  // Put the face safely on the right half of the box
-  const int faceCx = BOX_X + (BOX_W * 3) / 4;      // ~90 if BOX_W=120
-  const int faceCy = BOX_Y + (BOX_H / 2);          // vertically centered
-
-  // Debug: draw a dot at the center so we KNOW the coordinates are visible
-  Gui_Draw_Point(faceCx, faceCy, BLACK, PIXEL_3X3, AROUND);
+  const int faceCx = BOX_X + (BOX_W * 3) / 4;
+  const int faceCy = BOX_Y + (BOX_H / 2);
 
   drawFaceAt(faceCx, faceCy, faceR, pct);
-
 }
 
 void setup()
@@ -203,11 +195,11 @@ void setup()
 
   epdPinsInit();
 
-  // Known-good init path (keeps your display alive and updating)
-  EPD_HW_Init();
+  // IMPORTANT: GUI init matches GUI buffer + rotation use
+  EPD_HW_Init_GUI();
   EPD_WhiteScreen_White();
 
-  // Buffers (keep your working rotation)
+  // FIX: use the opposite landscape rotation
   Image_Init(BWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_90, WHITE);
   Image_Init(RWimage, EPD_WIDTH, EPD_HEIGHT, ROTATE_90, WHITE);
   Gui_SetMirror(MIRROR_NONE);
@@ -219,7 +211,7 @@ void setup()
   Serial.printf("BOOT raw=%d pct=%d\n", raw, pct);
 
   drawDynamic(pct);
-  EPD_Display(BWimage, RWimage);   // full draw once
+  EPD_Display(BWimage, RWimage);
 }
 
 void loop()
@@ -234,5 +226,10 @@ void loop()
   Serial.printf("raw=%d pct=%d\n", raw, pct);
 
   drawDynamic(pct);
+
+  // Full refresh each update (your current loop behavior)
   EPD_Display(BWimage, RWimage);
+
+  // If you want to go back to partial update later, use:
+  // partialUpdateBox();
 }
