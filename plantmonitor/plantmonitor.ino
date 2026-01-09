@@ -216,8 +216,8 @@ static void drawDynamic(int pct)
 
   int x0 = barX;
   int y0 = barY;
-  int x1 = barX + barW ;   // ✅ -1
-  int y1 = barY + barH;   // ✅ -1
+  int x1 = barX + barW ;   //  -1
+  int y1 = barY + barH;   //  -1
 
   Gui_Draw_Rectangle(x0, y0, x1, y1, BLACK, EMPTY, PIXEL_1X1);
 
@@ -260,7 +260,7 @@ void setup()
 
   epdPinsInit();
 
-    // ✅ probe power pin setup
+    //  probe power pin setup
   pinMode(PROBE_PWR_PIN, OUTPUT);
   digitalWrite(PROBE_PWR_PIN, LOW);   // keep probe OFF unless reading
 

@@ -439,7 +439,7 @@ void EPD_Dis_Part(unsigned int x_start, unsigned int y_start,
   y_end2 = y_start + PART_COLUMN - 1;
   if (y_end2 >= 256) { y_end1 = y_end2 / 256; y_end2 = y_end2 % 256; }
 
-  // ✅ DO NOT reset here. It causes flashing.
+  // DO NOT reset here. It causes flashing of the screen
   // EPD_W21_RST_0; delay(10); EPD_W21_RST_1; delay(10);
 
   // keep border stable (helps a bit)
